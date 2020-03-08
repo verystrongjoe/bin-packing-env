@@ -1,6 +1,7 @@
 # bin-packing-env
 A reinforcement learning environment for bin packing with simple GUI. very flexible environment based on parameters
 
+![gif](materials/env.gif)
 
 ## 기존 2D Bin Packing Problem 단점
  - 소스나 구현체를 전혀 구할 수 없음
