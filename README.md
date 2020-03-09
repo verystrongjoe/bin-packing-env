@@ -146,23 +146,23 @@ if __name__ == '__main__':
 ```
 
 ## State 
-    - Each episode's total bin index's list where each item consists of bin's width, bin's hight and loadble weight.
-    - Placed all bins' location history on its pallete from starting epsiode 
+- Each episode's total bin index's list where each item consists of bin's width, bin's hight and loadble weight.
+- Placed all bins' location history on its pallete from starting epsiode 
 
 ## Action
 There are three actions. 
-    - Bin's index
-    - decide whether or not x axis or y axis for search priority 
-    - whether or not rotate the bin
+- Bin's index
+- decide whether or not x axis or y axis for search priority 
+- whether or not rotate the bin
 
 For the first time, I tried defining action of the agent with x, y value, but considering the fact that each palette size is defined too differently and the number of cases is too difficult, the problem itself is too difficult. Inevitably, deciding exact location for bin to be placed is handled by the code. Instead, the agent can choose priority between searching over x axis or seraching over y axis. And the agent can decide action with its bin index, and whether or not it is rotated which means that it changes the bin's width and height each other. 
 
 
 ##  Plan
-    - Support environement to allow learning with multiple actors by supporting loading it on each thread 
-    - Build and Deploy (setup.py & pip install)
-    - 물류 문제처럼 팔레트가 여러개 있다고 가정 
-    - N개 이상 팔레트가 있다하고, 그만큼의 BIN들이 주고나서 N개의 팔렛트를 채울때까지 하나의 에피소드로 묶음
-    - 다른 알고리즘과 비교 검증시를 위해서 Random으로 BIn을 생성도 하지만 별도의 csv로 읽어서 그 기준으로 생성하게 변경
-    - DQN Agent 알고리즘 만들고 간단한 환경에서 학습 가능한지 돌려볼 계획
-    - pytorch TensorboardX를 만들어서 간단한 실험결과를 넣어 튜토리얼 작성
+- Support environement to allow learning with multiple actors by supporting loading it on each thread 
+- Build and Deploy (setup.py & pip install)
+- 물류 문제처럼 팔레트가 여러개 있다고 가정 
+- N개 이상 팔레트가 있다하고, 그만큼의 BIN들이 주고나서 N개의 팔렛트를 채울때까지 하나의 에피소드로 묶음
+- 다른 알고리즘과 비교 검증시를 위해서 Random으로 BIn을 생성도 하지만 별도의 csv로 읽어서 그 기준으로 생성하게 변경
+- DQN Agent 알고리즘 만들고 간단한 환경에서 학습 가능한지 돌려볼 계획
+- pytorch TensorboardX를 만들어서 간단한 실험결과를 넣어 튜토리얼 작성
