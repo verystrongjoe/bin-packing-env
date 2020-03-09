@@ -12,15 +12,9 @@ For example, I added some constraints below unlike other 2d bin packing problems
 - 2D가 아닌 3D 상황을 감안하여 물건이 쌓을때 상단에 어떤 물체가 있으면 쌓지 못하게 하였음 (BIN 선택시 빈 공간 파악 필요)
 - 당연히 BIN의 쌓는 위치에서의 크기가 팔레트 면적을 벗어나면 당연히 쌓지 못함
 
-## Reward
-There are two kinds of reward mode it provided.
+## Environment
+You can define below parameters on config.py 
 
-| MODE | Reward                               |
-|------|--------------------------------------|
-| 1    | 놓았던 BIN의 총 개수 / 총 BIN의 개수 |
-| 2    | 총 BIN의 면적                        |
-
-## 환경 파라메터
 | Category | Parameter | Type | Default | Range | Etc |
 |----------|-----------|------|-------|-----|-----|
 | GUI        | WINDOWS_POS_X         	| int    | 10  | 0 ~  maxiumum x of screen |  x value of the screen   |
@@ -51,7 +45,7 @@ There are two kinds of reward mode it provided.
 | Agent     | N_LAYERS        			| int      |  5    |     |   number of layers |
 
 
-## config.py
+### Example of config.py
 ```
 RENDER = True  # Pallet render 
 TICK_INTERVAL = 20  # the smaller it is, the slower the game plays
@@ -72,6 +66,16 @@ BIN_MIN_W_SIZE = 1
 BIN_MAX_W_SIZE = 1
 LOAD_WIDTH_THRESHOLD = 0.8  # Ratio
 ```
+
+## Reward
+There are two kinds of reward mode it provided.
+
+| MODE | Reward                               |
+|------|--------------------------------------|
+| 1    | 놓았던 BIN의 총 개수 / 총 BIN의 개수 |
+| 2    | 총 BIN의 면적                        |
+
+
 
 ##  Provided agent
 It provides a random agent not allowing same action in same episode and a DQN agent not evalutated yet.
@@ -141,24 +145,24 @@ if __name__ == '__main__':
     logging.debug('Complete')
 ```
 
-ㅁState 
- - Each episode's total bin index's list ( width, 
- - placed bins' history
+## State 
+    - Each episode's total bin index's list where each item consists of bin's width, bin's hight and loadble weight.
+    - Placed all bins' location history on its pallete from starting epsiode 
 
 ## Action
 There are three actions. 
-  - Bin's index
-  - decide whether or not x axis or y axis for search priority 
-  - whether or not rotate the bin
+    - Bin's index
+    - decide whether or not x axis or y axis for search priority 
+    - whether or not rotate the bin
 
 For the first time, I tried defining action of the agent with x, y value, but considering the fact that each palette size is defined too differently and the number of cases is too difficult, the problem itself is too difficult. Inevitably, deciding exact location for bin to be placed is handled by the code. Instead, the agent can choose priority between searching over x axis or seraching over y axis. And the agent can decide action with its bin index, and whether or not it is rotated which means that it changes the bin's width and height each other. 
 
 
 ##  Plan
-- Support environement to allow learning with multiple actors by supporting loading it on each thread 
-- Build and Deploy (setup.py & pip install)
-- 물류 문제처럼 팔레트가 여러개 있다고 가정 
-- N개 이상 팔레트가 있다하고, 그만큼의 BIN들이 주고나서 N개의 팔렛트를 채울때까지 하나의 에피소드로 묶음
-- 다른 알고리즘과 비교 검증시를 위해서 Random으로 BIn을 생성도 하지만 별도의 csv로 읽어서 그 기준으로 생성하게 변경
-- DQN Agent 알고리즘 만들고 간단한 환경에서 학습 가능한지 돌려볼 계획
-- pytorch TensorboardX를 만들어서 간단한 실험결과를 넣어 튜토리얼 작성
+    - Support environement to allow learning with multiple actors by supporting loading it on each thread 
+    - Build and Deploy (setup.py & pip install)
+    - 물류 문제처럼 팔레트가 여러개 있다고 가정 
+    - N개 이상 팔레트가 있다하고, 그만큼의 BIN들이 주고나서 N개의 팔렛트를 채울때까지 하나의 에피소드로 묶음
+    - 다른 알고리즘과 비교 검증시를 위해서 Random으로 BIn을 생성도 하지만 별도의 csv로 읽어서 그 기준으로 생성하게 변경
+    - DQN Agent 알고리즘 만들고 간단한 환경에서 학습 가능한지 돌려볼 계획
+    - pytorch TensorboardX를 만들어서 간단한 실험결과를 넣어 튜토리얼 작성
