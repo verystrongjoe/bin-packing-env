@@ -1,12 +1,8 @@
 from environment import PalleteWorld
-# from agent import *
-# from random_agent import *
 from agent import *
 from config import *
 import logging
-
-if ENV.RENDER:
-    import pygame
+import pygame
 
 if __name__ == '__main__':
 
@@ -43,13 +39,10 @@ if __name__ == '__main__':
             else:
                 next_state = None
 
-            # Store the transition in memory
             agent.save_sample(state, action, next_state, reward)
 
-            # Move to the next state
             state = next_state
 
-            # Perform one step of the optimization (on the target network)
             agent.optimize_model()
 
             step += 1
@@ -57,8 +50,9 @@ if __name__ == '__main__':
                 logging.debug('episode {} done..'.format(e))
                 break
 
-        #Update the target network, copying all weights and biases in DQN
         if e % AGENT.TARGET_UPDATE_INTERVAL == 0:
             agent.synchronize_model()
 
     logging.debug('Complete')
+
+
