@@ -131,35 +131,38 @@ class PalleteWorld(Env):
         :param action: bin index, priority x or priority y, rotate
         :return: next state
         """
-        b = Bin(*(self.bins_list[action.bin_index]))
-
-        if action.rotate == 1:
-            b = Bin(*(b.height,b.width, b.weight))
-
-        # https://stackoverflow.com/questions/2597104/break-the-nested-double-loop-in-python
-        class BinPlaced(Exception):pass
         self.is_bin_placed = False
 
-        try:
-            if action.priority == 0:
-                for y in range(self.start_y, ENV.ROW_COUNT):
-                    for x in range(self.start_x, ENV.COL_COUNT):
-                        if self.is_valid(x, y, b):
-                            self.p[ENV.ROW_COUNT - y - b.height:ENV.ROW_COUNT - y, x:x + b.width, 0] = action.bin_index
-                            self.p[ENV.ROW_COUNT - y - b.height:ENV.ROW_COUNT - y, x:x + b.width, 1] = b.weight
-                            raise BinPlaced
-            elif action.priority == 1:
-                for x in range(self.start_x, ENV.COL_COUNT):
+        if action.bin_index not in self.previous_actions:
+
+            b = Bin(*(self.bins_list[action.bin_index]))
+
+            if action.rotate == 1:
+                b = Bin(*(b.height,b.width, b.weight))
+
+            # https://stackoverflow.com/questions/2597104/break-the-nested-double-loop-in-python
+            class BinPlaced(Exception):pass
+
+            try:
+                if action.priority == 0:
                     for y in range(self.start_y, ENV.ROW_COUNT):
-                        if self.is_valid(x, y, b):
-                            self.p[ENV.ROW_COUNT - y - b.height :ENV.ROW_COUNT - y, x:x + b.width, 0] = action.bin_index
-                            self.p[ENV.ROW_COUNT - y - b.height :ENV.ROW_COUNT - y, x:x + b.width, 1] = b.weight
-                            raise BinPlaced
-            logging.debug('This bin can not be placed.')
-        except BinPlaced:
-            self.is_bin_placed = True
-            self.current_bin_placed += 1
-            self.previous_actions.append(action.bin_index)
+                        for x in range(self.start_x, ENV.COL_COUNT):
+                            if self.is_valid(x, y, b):
+                                self.p[ENV.ROW_COUNT - y - b.height:ENV.ROW_COUNT - y, x:x + b.width, 0] = action.bin_index
+                                self.p[ENV.ROW_COUNT - y - b.height:ENV.ROW_COUNT - y, x:x + b.width, 1] = b.weight
+                                raise BinPlaced
+                elif action.priority == 1:
+                    for x in range(self.start_x, ENV.COL_COUNT):
+                        for y in range(self.start_y, ENV.ROW_COUNT):
+                            if self.is_valid(x, y, b):
+                                self.p[ENV.ROW_COUNT - y - b.height :ENV.ROW_COUNT - y, x:x + b.width, 0] = action.bin_index
+                                self.p[ENV.ROW_COUNT - y - b.height :ENV.ROW_COUNT - y, x:x + b.width, 1] = b.weight
+                                raise BinPlaced
+                logging.debug('This bin can not be placed.')
+            except BinPlaced:
+                self.is_bin_placed = True
+                self.current_bin_placed += 1
+                self.previous_actions.append(action.bin_index)
 
         # next_state, reward, done, info
         return (self.bins_list, self.p), self.get_reward(), self.is_done(), None
@@ -177,7 +180,7 @@ class PalleteWorld(Env):
         # todo : do more reward engineering for every step
         if REWARD.MODE == 0:
             if self.is_done():
-                return len(self.current_bin_placed) / ENV.BIN_MAX_COUNT
+                return self.current_bin_placed / ENV.BIN_MAX_COUNT
             elif not self.is_bin_placed:
                 return REWARD.INVALID_ACTION_REWARD
             else:

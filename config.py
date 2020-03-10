@@ -41,7 +41,9 @@ class ENV:
     CELL_SIZE = 20
 
     # Bins information
-    BIN_MAX_COUNT = 50
+    BIN_N_STATE = 2  # pos, weight on 2d
+
+    BIN_MAX_COUNT = 10
     EPISODE_MAX_STEP = 50
 
     BIN_MIN_X_SIZE = 1
@@ -59,6 +61,9 @@ class ENV:
 
     # Constraint
     LOAD_WIDTH_THRESHOLD = 0.8  # Ratio
+
+    ACTION_SPACE = (BIN_MAX_COUNT, 2, 2)
+
 
 
 class REWARD:

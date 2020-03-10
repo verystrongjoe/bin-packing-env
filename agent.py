@@ -1,3 +1,12 @@
+"""
+Action Branching Architectures for Deep Reinforcement Learning
+https://arxiv.org/pdf/1711.08946.pdf
+
+
+if there is other continuous action, we can consider a idea below.
+Parametrized Deep Q-Networks Learning: Reinforcement Learning with Discrete-Continuous Hybrid Action Space
+https://arxiv.org/pdf/1810.06394.pdf
+"""
 from config import *
 import numpy as np
 import random
@@ -8,31 +17,38 @@ import torch.nn.functional as F
 import torchvision.transforms as T
 from networks import *
 from modules import *
-
+from config import *
 
 class PalletAgent:
 
     def __init__(self):
         self.replay_memory = ReplayMemory(capacity=AGENT.REPLAY_MEMORY_SIZE)
+
         self.policy_net = DQN().to(device)
         self.target_net = DQN().to(device)
+
+        self.policy_net = BranchingDQN(ENV.BIN_MAX_COUNT * 3, 3, [ENV.BIN_MAX_COUNT, 2, 2]).to(device)
+        self.target_net = BranchingDQN(ENV.BIN_MAX_COUNT * 3, 3, [ENV.BIN_MAX_COUNT, 2, 2]).to(device)
+
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.target_net.eval()
         self.optimizer = optim.RMSprop(self.policy_net.parameters())
 
     # return epsilon-greedy based action
     def get_action(self, state):
-
         s = (
             torch.tensor(state[0], dtype=torch.float).to(device),
             torch.tensor(state[1], dtype=torch.float).to(device)
         )
 
+        action = [0, 0, 0]
         if np.random.rand() > AGENT.EPSILON:
-            action = np.random.choice(ENV.BIN_MAX_COUNT)
+            action[0] = np.random.randint(0, ENV.ACTION_SPACE[0])
+            action[1] = np.random.randint(0, ENV.ACTION_SPACE[1])
+            action[2] = np.random.randint(0, ENV.ACTION_SPACE[2])
         else:
-            state_action = self.policy_net(s[0], s[1])[0]
-            action = self.arg_max(state_action)
+            list_state_action = self.policy_net(s[0], s[1])
+            action = [self.arg_max(state_action.squeeze(0)) for state_action in list_state_action]
         return action
 
     @staticmethod
@@ -54,10 +70,13 @@ class PalletAgent:
             torch.tensor(state[1], dtype=torch.float).to(device)
         )
 
-        ns = (
-            torch.tensor(next_state[0], dtype=torch.float).to(device),
-            torch.tensor(next_state[1], dtype=torch.float).to(device)
-        )
+        if next_state is not None:
+            ns = (
+                torch.tensor(next_state[0], dtype=torch.float).to(device),
+                torch.tensor(next_state[1], dtype=torch.float).to(device)
+            )
+        else:
+            ns = None
 
         self.replay_memory.push(s, action, ns, reward)
 
@@ -81,13 +100,36 @@ class PalletAgent:
         reward_batch = torch.tensor(batch.reward, dtype=torch.float32, device=device)
 
         # (batch, state-action values)
-        state_action_values = self.policy_net(state_batch_0, state_batch_1).gather(1, action_batch.reshape(AGENT.BATCH_SIZE, 1).long())
+        list_of_state_action_values = self.policy_net(state_batch_0, state_batch_1)
+        state_action_values = []
+        for i in range(ENV.ACTION_SIZE):
+            state_action_values.append(
+                list_of_state_action_values[i].gather(1, action_batch[:,i].reshape(AGENT.BATCH_SIZE).unsqueeze(-1).long())
+            )
 
-        next_state_values = torch.zeros(AGENT.BATCH_SIZE, device=device)
-        next_state_values[non_final_mask] = self.target_net(non_final_next_states_0, non_final_next_states_1).max(1)[0].detach()
-        expected_state_action_values = (next_state_values * AGENT.GAMMA) + reward_batch
+        next_state_values = [
+            torch.zeros(AGENT.BATCH_SIZE, device=device),
+            torch.zeros(AGENT.BATCH_SIZE, device=device),
+            torch.zeros(AGENT.BATCH_SIZE, device=device)
+        ]
 
-        loss = F.smooth_l1_loss(state_action_values, expected_state_action_values.unsqueeze(1))
+        for i in range(ENV.ACTION_SIZE):
+            # action_index, non final mask over batch
+            next_state_values[i][non_final_mask] = self.target_net(non_final_next_states_0, non_final_next_states_1)[i].max(1)[0].detach()
+
+        # average operator for reduction
+        # avg_next_state_values = torch.mean(
+        #     torch.stack(
+        #         [next_state_values[a].max(1) for a in range(ENV.ACTION_SIZE)], dim=-1), dim=-1)
+        # avg_next_state_values = next_state_values[a].max(1) for a in range(ENV.ACTION_SIZE)
+
+        expected_state_action_values = []
+        for i in range(ENV.ACTION_SIZE):
+            expected_state_action_values.append((next_state_values[i] * AGENT.GAMMA) + reward_batch)
+
+        loss = torch.tensor(0.).to(device)
+        for i in range(ENV.ACTION_SIZE):
+            loss += F.smooth_l1_loss(state_action_values[i], expected_state_action_values[i].unsqueeze(1))
 
         # optimize the model
         self.optimizer.zero_grad()

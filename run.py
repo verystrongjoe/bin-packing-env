@@ -20,14 +20,15 @@ if __name__ == '__main__':
 
         while True:
 
-            while True:
-                action = agent.get_action(state)
-                if action not in env.previous_actions:
-                    break
+            # while True:
+            #     action = agent.get_action(state)
+            #     if action not in env.previous_actions:
+            #         break
+            action = agent.get_action(state)
 
             logging.debug('trying {} step with {} action'.format(step, action))
 
-            a = Action(bin_index=action, priority=np.random.choice(2), rotate=1)
+            a = Action(bin_index=action[0], priority=action[1], rotate=action[2])
             next_state, reward, done, _ = env.step(a)
 
             if ENV.RENDER:

@@ -76,15 +76,29 @@ There are two kinds of reward mode it provided.
 | 2    | 총 BIN의 면적                        |
 
 
-
 ##  Provided agent
 It provides a random agent not allowing same action in same episode and a DQN agent not evalutated yet.
+### Random Agent
+It is a trivial agent for you to understand how this environment works and it skips same action in same episode.
+ 
+### Branch-DQN Agent 
+We can not use vanilla DQN agent like I said earlier. It is not simple problem. This agent needs to take multiple discrete actions per each step. For this, it provides a recent algorithm called [Branch-DQN](https://arxiv.org/pdf/1711.08946.pdf) or Branching Dueling Q-Network (BDQ).. This Branch-DQN was implemented by a paper called "Action Branching Architectures for Deep Reinforcement Learning".
 
-```
-bin-packing-env\agent.py
-bin-packing-env\random_agent.py
-```
+## State 
+- Each episode's total bin index's list where each item consists of bin's width, bin's hight and loadble weight.
+- Placed all bins' location history on its pallete from starting epsiode 
 
+## Action
+There are three actions. 
+- Bin's index
+- decide whether or not x axis or y axis for search priority 
+- whether or not rotate the bin
+
+For the first time, I tried defining action of the agent with x, y value, but considering the fact that each palette size is defined too differently and the number of cases is too difficult, the problem itself is too difficult. Inevitably, deciding exact location for bin to be placed is handled by the code. Instead, the agent can choose priority between searching over x axis or seraching over y axis. And the agent can decide action with its bin index, and whether or not it is rotated which means that it changes the bin's width and height each other. 
+
+
+
+## How to run
 bin-packing-env\run.py
 ```
 from environment import PalleteWorld
@@ -145,18 +159,6 @@ if __name__ == '__main__':
     logging.debug('Complete')
 ```
 
-## State 
-- Each episode's total bin index's list where each item consists of bin's width, bin's hight and loadble weight.
-- Placed all bins' location history on its pallete from starting epsiode 
-
-## Action
-There are three actions. 
-- Bin's index
-- decide whether or not x axis or y axis for search priority 
-- whether or not rotate the bin
-
-For the first time, I tried defining action of the agent with x, y value, but considering the fact that each palette size is defined too differently and the number of cases is too difficult, the problem itself is too difficult. Inevitably, deciding exact location for bin to be placed is handled by the code. Instead, the agent can choose priority between searching over x axis or seraching over y axis. And the agent can decide action with its bin index, and whether or not it is rotated which means that it changes the bin's width and height each other. 
-
 
 ##  Plan
 - Support environement to allow learning with multiple actors by supporting loading it on each thread 
@@ -166,3 +168,7 @@ For the first time, I tried defining action of the agent with x, y value, but co
 - 다른 알고리즘과 비교 검증시를 위해서 Random으로 BIn을 생성도 하지만 별도의 csv로 읽어서 그 기준으로 생성하게 변경
 - DQN Agent 알고리즘 만들고 간단한 환경에서 학습 가능한지 돌려볼 계획
 - pytorch TensorboardX를 만들어서 간단한 실험결과를 넣어 튜토리얼 작성
+
+
+## Reference
+[1. Tavakoli, A., Pardo, F., & Kormushev, P. (2018, April). Action branching architectures for deep reinforcement learning. In Thirty-Second AAAI Conference on Artificial Intelligence.](https://arxiv.org/pdf/1711.08946.pdf)
