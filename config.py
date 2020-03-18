@@ -12,6 +12,7 @@ Action = namedtuple('Action', ('bin_index', 'priority', 'rotate'))
 # if gpu is to be used
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+
 # GUI
 class GUI:
     BLACK = (0, 0, 0)
@@ -31,38 +32,39 @@ class GUI:
 class ENV:
 
     RENDER = True
-    TICK_INTERVAL = 20  # the smaller it is, the slower the game plays
+    TICK_INTERVAL = 10000  # the smaller it is, the slower the game plays
 
     # Environment Parameter
     FONT_SIZE = 15
     CAPTION_NAME = '2D Bin Packing simulator by Uk Jo'
-    ROW_COUNT = 30
-    COL_COUNT = 30
-    CELL_SIZE = 20
+    ROW_COUNT = 10
+    COL_COUNT = 10
+    CELL_SIZE = 50
 
     # Bins information
     BIN_N_STATE = 2  # pos, weight on 2d
 
-    BIN_MAX_COUNT = 10
-    EPISODE_MAX_STEP = 50
+    BIN_MAX_COUNT = 20
+    EPISODE_MAX_STEP = 20
 
     BIN_MIN_X_SIZE = 1
     BIN_MIN_Y_SIZE = 1
-    BIN_MAX_X_SIZE = 10
-    BIN_MAX_Y_SIZE = 10
+    BIN_MAX_X_SIZE = 3
+    BIN_MAX_Y_SIZE = 3
 
     BIN_MIN_W_SIZE = 1
-    BIN_MAX_W_SIZE = 1
+    BIN_MAX_W_SIZE = 2
 
     # Agent Side
     AGENT_STARTING_POS = [0, 0]
     ACTION_SIZE = 3   # x, y, rotate
-    N_EPISODES = 10000
+    N_EPISODES = 1000000
 
     # Constraint
     LOAD_WIDTH_THRESHOLD = 0.8  # Ratio
 
     ACTION_SPACE = (BIN_MAX_COUNT, 2, 2)
+    VERBOSE = 0
 
 
 
@@ -80,4 +82,4 @@ class AGENT:
     TARGET_UPDATE_INTERVAL = 1000
     GAMMA = 0.9
     REPLAY_MEMORY_SIZE = 10000
-    EMBEDDING_DIM = 100
+    EMBEDDING_DIM = 10

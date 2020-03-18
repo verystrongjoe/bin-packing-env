@@ -1,143 +1,228 @@
-"""
-Action Branching Architectures for Deep Reinforcement Learning
-https://arxiv.org/pdf/1711.08946.pdf
+# %matplotlib inline
 
-
-if there is other continuous action, we can consider a idea below.
-Parametrized Deep Q-Networks Learning: Reinforcement Learning with Discrete-Continuous Hybrid Action Space
-https://arxiv.org/pdf/1810.06394.pdf
-"""
-from config import *
 import numpy as np
 import random
-import torch
-import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
-import torchvision.transforms as T
-from networks import *
-from modules import *
-from config import *
 
-class PalletAgent:
+import MCTS as mc
+from game import GameState
 
-    def __init__(self):
-        self.replay_memory = ReplayMemory(capacity=AGENT.REPLAY_MEMORY_SIZE)
+import config
+import logging
+import time
 
-        self.policy_net = DQN().to(device)
-        self.target_net = DQN().to(device)
+import matplotlib.pyplot as plt
 
-        self.policy_net = BranchingDQN(ENV.BIN_MAX_COUNT * 3, 3, [ENV.BIN_MAX_COUNT, 2, 2]).to(device)
-        self.target_net = BranchingDQN(ENV.BIN_MAX_COUNT * 3, 3, [ENV.BIN_MAX_COUNT, 2, 2]).to(device)
+import pylab as pl
 
-        self.target_net.load_state_dict(self.policy_net.state_dict())
-        self.target_net.eval()
-        self.optimizer = optim.RMSprop(self.policy_net.parameters())
 
-    # return epsilon-greedy based action
-    def get_action(self, state):
-        s = (
-            torch.tensor(state[0], dtype=torch.float).to(device),
-            torch.tensor(state[1], dtype=torch.float).to(device)
-        )
+class User():
+	def __init__(self, name, state_size, action_size):
+		self.name = name
+		self.state_size = state_size
+		self.action_size = action_size
 
-        action = [0, 0, 0]
-        if np.random.rand() > AGENT.EPSILON:
-            action[0] = np.random.randint(0, ENV.ACTION_SPACE[0])
-            action[1] = np.random.randint(0, ENV.ACTION_SPACE[1])
-            action[2] = np.random.randint(0, ENV.ACTION_SPACE[2])
-        else:
-            list_state_action = self.policy_net(s[0], s[1])
-            action = [self.arg_max(state_action.squeeze(0)) for state_action in list_state_action]
-        return action
+	def act(self, state, tau):
+		action = input('Enter your chosen action: ')
+		pi = np.zeros(self.action_size)
+		pi[action] = 1
+		value = None
+		NN_value = None
+		return (action, pi, value, NN_value)
 
-    @staticmethod
-    def arg_max(state_action):
-        max_index_list = []
-        max_value = state_action[0]
-        for index, value in enumerate(state_action):
-            if value > max_value:
-                max_index_list.clear()
-                max_value = value
-                max_index_list.append(index)
-            elif value == max_value:
-                max_index_list.append(index)
-        return random.choice(max_index_list)
 
-    def save_sample(self, state, action, next_state, reward):
-        s = (
-            torch.tensor(state[0], dtype=torch.float).to(device),
-            torch.tensor(state[1], dtype=torch.float).to(device)
-        )
 
-        if next_state is not None:
-            ns = (
-                torch.tensor(next_state[0], dtype=torch.float).to(device),
-                torch.tensor(next_state[1], dtype=torch.float).to(device)
-            )
-        else:
-            ns = None
+class Agent():
+	def __init__(self, name, state_size, action_size, mcts_simulations, cpuct, model):
+		self.name = name
 
-        self.replay_memory.push(s, action, ns, reward)
+		self.state_size = state_size
+		self.action_size = action_size
 
-    def optimize_model(self):
-        if len(self.replay_memory) < AGENT.BATCH_SIZE:
-            return
-        transitions = self.replay_memory.sample(AGENT.BATCH_SIZE)
-        # https://stackoverflow.com/a/19343/3343043
-        batch = Transition(*zip(*transitions))
+		self.cpuct = cpuct
 
-        # Compute a mask of non-final states and concatenate the batch elements
-        # (a final state would've been the one after which simulation ended)
-        non_final_mask = torch.tensor(tuple(map(lambda s : s is not None, batch.next_state)), device=device, dtype=torch.bool)
-        non_final_next_states_0 = torch.cat([s[0] for s in batch.next_state if s is not None], dim=0).reshape(AGENT.BATCH_SIZE, ENV.BIN_MAX_COUNT, 3)
-        non_final_next_states_1 = torch.cat([s[1] for s in batch.next_state if s is not None], dim=0).reshape(AGENT.BATCH_SIZE, ENV.ROW_COUNT, ENV.COL_COUNT, 2)
+		self.MCTSsimulations = mcts_simulations
+		self.model = model
 
-        state_batch_0 = torch.cat([s[0] for s in batch.state], dim=0).reshape(AGENT.BATCH_SIZE, ENV.BIN_MAX_COUNT, 3)
-        state_batch_1 = torch.cat([s[1] for s in batch.state], dim=0).reshape(AGENT.BATCH_SIZE, ENV.ROW_COUNT, ENV.COL_COUNT, 2)
+		self.mcts = None
 
-        action_batch = torch.tensor(batch.action, dtype=torch.float32, device=device)
-        reward_batch = torch.tensor(batch.reward, dtype=torch.float32, device=device)
+		self.train_overall_loss = []
+		self.train_value_loss = []
+		self.train_policy_loss = []
+		self.val_overall_loss = []
+		self.val_value_loss = []
+		self.val_policy_loss = []
 
-        # (batch, state-action values)
-        list_of_state_action_values = self.policy_net(state_batch_0, state_batch_1)
-        state_action_values = []
-        for i in range(ENV.ACTION_SIZE):
-            state_action_values.append(
-                list_of_state_action_values[i].gather(1, action_batch[:,i].reshape(AGENT.BATCH_SIZE).unsqueeze(-1).long())
-            )
+	
+	def simulate(self):
 
-        next_state_values = [
-            torch.zeros(AGENT.BATCH_SIZE, device=device),
-            torch.zeros(AGENT.BATCH_SIZE, device=device),
-            torch.zeros(AGENT.BATCH_SIZE, device=device)
-        ]
+		logging.info('ROOT NODE...%s', self.mcts.root.state.id)
+		self.mcts.root.state.render(logging)
+		logging.info('CURRENT PLAYER...%d', self.mcts.root.state.playerTurn)
 
-        for i in range(ENV.ACTION_SIZE):
-            # action_index, non final mask over batch
-            next_state_values[i][non_final_mask] = self.target_net(non_final_next_states_0, non_final_next_states_1)[i].max(1)[0].detach()
+		##### MOVE THE LEAF NODE
+		leaf, value, done, breadcrumbs = self.mcts.moveToLeaf()
+		leaf.state.render(logging)
 
-        # average operator for reduction
-        # avg_next_state_values = torch.mean(
-        #     torch.stack(
-        #         [next_state_values[a].max(1) for a in range(ENV.ACTION_SIZE)], dim=-1), dim=-1)
-        # avg_next_state_values = next_state_values[a].max(1) for a in range(ENV.ACTION_SIZE)
+		##### EVALUATE THE LEAF NODE
+		value, breadcrumbs = self.evaluateLeaf(leaf, value, done, breadcrumbs)
 
-        expected_state_action_values = []
-        for i in range(ENV.ACTION_SIZE):
-            expected_state_action_values.append((next_state_values[i] * AGENT.GAMMA) + reward_batch)
+		##### BACKFILL THE VALUE THROUGH THE TREE
+		self.mcts.backFill(leaf, value, breadcrumbs)
 
-        loss = torch.tensor(0.).to(device)
-        for i in range(ENV.ACTION_SIZE):
-            loss += F.smooth_l1_loss(state_action_values[i], expected_state_action_values[i].unsqueeze(1))
 
-        # optimize the model
-        self.optimizer.zero_grad()
-        loss.backward()
+	def act(self, state, tau):
 
-        for param in self.policy_net.parameters():
-            param.grad.data.clamp_(-1,1)
-        self.optimizer.step()
+		if self.mcts == None or state.id not in self.mcts.tree:
+			self.buildMCTS(state)
+		else:
+			self.changeRootMCTS(state)
 
-    def synchronize_model(self):
-        self.target_net.load_state_dict(self.policy_net.state_dict())
+		#### run the simulation
+		for sim in range(self.MCTSsimulations):
+			logging.info('***************************')
+			logging.info('****** SIMULATION %d ******', sim + 1)
+			logging.info('***************************')
+			self.simulate()
+
+		#### get action values
+		pi, values = self.getAV(1)
+
+		####pick the action
+		action, value = self.chooseAction(pi, values, tau)
+
+		nextState, _, _ = state.takeAction(action)
+
+		NN_value = -self.get_preds(nextState)[0]
+
+		logging.info('ACTION VALUES...%s', pi)
+		logging.info('CHOSEN ACTION...%d', action)
+		logging.info('MCTS PERCEIVED VALUE...%f', value)
+		logging.info('NN PERCEIVED VALUE...%f', NN_value)
+
+		return (action, pi, value, NN_value)
+
+
+	def get_preds(self, state):
+		#predict the leaf
+		inputToModel = self.model.convert_to_model_input(state)
+
+		preds = self.model.predict(inputToModel)
+
+		value_array = preds[0]
+		logits_array = preds[1]
+		value = value_array[0]
+
+		logits = logits_array[0]
+
+		allowedActions = state.allowedActions
+
+		mask = np.ones(logits.shape,dtype=bool)
+		mask[allowedActions] = False
+		logits[mask] = -100
+
+		#SOFTMAX
+		odds = np.exp(logits)
+		probs = odds / np.sum(odds) ###put this just before the for?
+
+		return ((value, probs, allowedActions))
+
+
+	def evaluateLeaf(self, leaf, value, done, breadcrumbs):
+
+		logging.info('------EVALUATING LEAF------')
+
+		if done == 0:
+	
+			value, probs, allowedActions = self.get_preds(leaf.state)
+			logging.info('PREDICTED VALUE FOR %d: %f', leaf.state.playerTurn, value)
+
+			probs = probs[allowedActions]
+
+			for idx, action in enumerate(allowedActions):
+				newState, _, _ = leaf.state.takeAction(action)
+				if newState.id not in self.mcts.tree:
+					node = mc.Node(newState)
+					self.mcts.addNode(node)
+					logging.info('added node...%s...p = %f', node.id, probs[idx])
+				else:
+					node = self.mcts.tree[newState.id]
+					logging.info('existing node...%s...', node.id)
+
+				newEdge = mc.Edge(leaf, node, probs[idx], action)
+				leaf.edges.append((action, newEdge))
+				
+		else:
+			logging.info('GAME VALUE FOR %d: %f', leaf.playerTurn, value)
+
+		return ((value, breadcrumbs))
+
+
+		
+	def getAV(self, tau):
+		edges = self.mcts.root.edges
+		pi = np.zeros(self.action_size, dtype=np.integer)
+		values = np.zeros(self.action_size, dtype=np.float32)
+		
+		for action, edge in edges:
+			pi[action] = pow(edge.stats['N'], 1/tau)
+			values[action] = edge.stats['Q']
+
+		pi = pi / (np.sum(pi) * 1.0)
+		return pi, values
+
+	def chooseAction(self, pi, values, tau):
+		if tau == 0:
+			actions = np.argwhere(pi == max(pi))
+			action = random.choice(actions)[0]
+		else:
+			action_idx = np.random.multinomial(1, pi)
+			action = np.where(action_idx==1)[0][0]
+
+		value = values[action]
+
+		return action, value
+
+	def replay(self, ltmemory):
+		logging.info('******RETRAINING MODEL******')
+
+
+		for i in range(config.TRAINING_LOOPS):
+			minibatch = random.sample(ltmemory, min(config.BATCH_SIZE, len(ltmemory)))
+
+			training_states = [self.model.convertToModelInput(row['state']) for row in minibatch]
+			training_targets = {'value_head': np.array([row['value'] for row in minibatch])
+								, 'policy_head': np.array([row['AV'] for row in minibatch])} 
+
+			fit = self.model.fit(training_states, training_targets, epochs=config.EPOCHS, verbose=1, validation_split=0, batch_size = 32)
+			logging.info('NEW LOSS %s', fit.history)
+
+			self.train_overall_loss.append(round(fit.history['loss'][config.EPOCHS - 1],4))
+			self.train_value_loss.append(round(fit.history['value_head_loss'][config.EPOCHS - 1],4)) 
+			self.train_policy_loss.append(round(fit.history['policy_head_loss'][config.EPOCHS - 1],4)) 
+
+		plt.plot(self.train_overall_loss, 'k')
+		plt.plot(self.train_value_loss, 'k:')
+		plt.plot(self.train_policy_loss, 'k--')
+
+		plt.legend(['train_overall_loss', 'train_value_loss', 'train_policy_loss'], loc='lower left')
+
+		# display.clear_output(wait=True)
+		# display.display(pl.gcf())
+		pl.gcf().clear()
+		time.sleep(1.0)
+
+		print('\n')
+		self.model.printWeightAverages()
+
+	def predict(self, inputToModel):
+		preds = self.model.predict(inputToModel).numpy()
+		return preds
+
+	def buildMCTS(self, state):
+		logging.info('****** BUILDING NEW MCTS TREE FOR AGENT %s ******', self.name)
+		self.root = mc.Node(state)
+		self.mcts = mc.MCTS(self.root, self.cpuct)
+
+	def changeRootMCTS(self, state):
+		logging.info('****** CHANGING ROOT OF MCTS TREE TO %s FOR AGENT %s ******', state.id, self.name)
+		self.mcts.root = self.mcts.tree[state.id]

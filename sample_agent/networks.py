@@ -67,7 +67,7 @@ class DQN(nn.Module):
 class BDQN(nn.Module):
 
     def __init__(self, observation, action_dim, n):
-        super().__init__()
+        super(BDQN, self).__init__()
         self.action_dim = action_dim
         self.n = n
         self.model = nn.Sequential(nn.Linear(observation, 128),
@@ -100,17 +100,17 @@ class BranchingDQN(nn.Module):
         self.linear1 = nn.Linear(observation, AGENT.EMBEDDING_DIM)
         self.linear2 = nn.Linear(AGENT.EMBEDDING_DIM, AGENT.EMBEDDING_DIM)
 
-        self.conv1 = nn.Conv2d(ENV.BIN_N_STATE, 4, kernel_size=5, stride=2)
+        self.conv1 = nn.Conv2d(ENV.BIN_N_STATE, 4, kernel_size=4, stride=2)
         self.bn1 = nn.BatchNorm2d(4)
-        self.conv2 = nn.Conv2d(4, 8, kernel_size=3, stride=2)
+        self.conv2 = nn.Conv2d(4, 8, kernel_size=2, stride=1)
         self.bn2 = nn.BatchNorm2d(8)
 
         # Number of Linear input connections depends on output of conv2d layers
         # and therefore the input image size, so compute it.
         def conv2d_size_out(size, kernel_size=5, stride=2):
             return (size - (kernel_size - 1) - 1) // stride + 1
-        convw = conv2d_size_out(conv2d_size_out(ENV.ROW_COUNT, 5, 2), 3, 2)
-        convh = conv2d_size_out(conv2d_size_out(ENV.COL_COUNT, 5, 2), 3, 2)
+        convw = conv2d_size_out(conv2d_size_out(ENV.ROW_COUNT, 4, 2), 2, 1)
+        convh = conv2d_size_out(conv2d_size_out(ENV.COL_COUNT, 4, 2), 2, 1)
 
         linear_input_size = convw * convh * 8 + AGENT.EMBEDDING_DIM
 
@@ -136,7 +136,7 @@ class BranchingDQN(nn.Module):
             bin_info = bin_info.flatten()
             bin_info.unsqueeze_(0)
         else:
-            bin_info = bin_info.reshape(AGENT.BATCH_SIZE, ENV.BIN_MAX_COUNT * 3)
+            bin_info = bin_info.reshape(-1, ENV.BIN_MAX_COUNT * 3)
 
         if len(pallet_info.shape) != 4:
             pallet_info = pallet_info.unsqueeze(0)

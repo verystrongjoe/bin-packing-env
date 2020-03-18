@@ -70,6 +70,7 @@ class PalleteWorld(Env):
         self.current_bin_placed = 0
         self.previous_actions = []
         self.is_bin_placed = False
+        self.n_step = 0
 
         return self.bins_list, self.p
 
@@ -79,41 +80,52 @@ class PalleteWorld(Env):
         can_load = True
         is_spacious = True
         is_exist_above = False
+        verbose = ENV.VERBOSE
 
         # todo : for test, it examines every possible cases even if it finds out is not impossible for now.
         if r + b.height > ENV.ROW_COUNT:
             is_spacious = False
-            logging.debug('this is not valid because it is not spacious over x axis.')
+            if verbose != 0:
+                logging.debug('Not valid. It\'s not spacious over x axis.')
             return False
 
         if c + b.width > ENV.COL_COUNT:
             is_spacious = False
-            logging.debug('this is not valid because it is not spacious over y axis.')
+            if verbose != 0:
+                logging.debug('Not valid. It\'s not spacious over y axis.')
             return False
 
         # todo : to make it real, it adds constraints that any bins can not load if there is any bins above of it.
         if r != ENV.ROW_COUNT -1:
             if not (-1 == self.p[0:ENV.ROW_COUNT-r, c:c + b.width, 0]).all():
-                logging.debug('this is not valid because there are other bins above of it.')
+                if verbose != 0:
+                    logging.debug('this is not valid because there are other bins above of it.')
                 is_exist_above = True
+                return False
 
         if not (-1 == self.p[ENV.ROW_COUNT-r-b.height:ENV.ROW_COUNT-r, c:c + b.width, 0]).all():
-            logging.debug('this is not valid because this area is already possessed by other bins.')
+            if verbose != 0:
+                logging.debug('Not valid. The area is already possessed by other bins.')
             is_exist = True
+            return False
 
         if r >= 1:
             if (b.width-sum((self.p[ENV.ROW_COUNT-r, c:c+b.width, 0]) == -1.0)) / b.width >= ENV.LOAD_WIDTH_THRESHOLD:
                 # todo : check this constraint working
                 is_fail = False
             else:
-                logging.debug('this is not valid because this bin could be fallen lack of support of bottom bins')
+                if verbose != 0:
+                    logging.debug('Not valid. The bin could be fallen lack of support of bottom bins')
                 is_fall = True
+                return False
 
         # can_load check
         if c > 0:
             if b.weight > self.p[r:r+b.height, c - 1, 1].any():
-                logging.debug('this is not valid because bins below can not stand the weight of this bin.')
+                if verbose != 0:
+                    logging.debug('Not valid. The bins below can not stand the weight of this bin.')
                 can_load = False
+                return False
 
         if is_spacious and not is_exist and not is_fall and can_load and not is_exist_above:
             return True
@@ -132,6 +144,7 @@ class PalleteWorld(Env):
         :return: next state
         """
         self.is_bin_placed = False
+        self.n_step += 1
 
         if action.bin_index not in self.previous_actions:
 
@@ -158,7 +171,8 @@ class PalleteWorld(Env):
                                 self.p[ENV.ROW_COUNT - y - b.height :ENV.ROW_COUNT - y, x:x + b.width, 0] = action.bin_index
                                 self.p[ENV.ROW_COUNT - y - b.height :ENV.ROW_COUNT - y, x:x + b.width, 1] = b.weight
                                 raise BinPlaced
-                logging.debug('This bin can not be placed.')
+                if ENV.VERBOSE != 0:
+                    logging.debug('This bin can not be placed.')
             except BinPlaced:
                 self.is_bin_placed = True
                 self.current_bin_placed += 1
@@ -168,7 +182,7 @@ class PalleteWorld(Env):
         return (self.bins_list, self.p), self.get_reward(), self.is_done(), None
 
     def is_done(self):
-        if self.current_bin_placed == ENV.BIN_MAX_COUNT:
+        if self.current_bin_placed == ENV.BIN_MAX_COUNT or self.n_step == ENV.EPISODE_MAX_STEP:
             return True
         else:
             return False
