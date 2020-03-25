@@ -1,3 +1,8 @@
+"""
+ 4,531,985,219,092 cases
+"""
+
+
 import numpy as np
 import logging
 
@@ -187,7 +192,6 @@ class GameState():
 				return 1
 		return 0
 
-
 	def _getValue(self):
 		# This is the value of the state for the current player
 		# i.e. if the previous player played a winning move, you lose
@@ -196,13 +200,9 @@ class GameState():
 				return (-1, -1, 1)
 		return (0, 0, 0)
 
-
 	def _getScore(self):
 		tmp = self.value
 		return (tmp[1], tmp[2])
-
-
-
 
 	def takeAction(self, action):
 		newBoard = np.array(self.board)
@@ -218,9 +218,6 @@ class GameState():
 			done = 1
 
 		return (newState, value, done) 
-
-
-
 
 	def render(self, logger):
 		for r in range(6):

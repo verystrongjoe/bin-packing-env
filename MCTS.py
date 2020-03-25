@@ -17,6 +17,7 @@ class Node:
 		else:
 			return True
 
+
 class Edge:
 
 	def __init__(self, inNode, outNode, prior, action):
@@ -26,29 +27,27 @@ class Edge:
 		self.playerTurn = inNode.state.playerTurn
 		self.action = action
 
-		self.stats =  {
+		self.stats = {
 					'N': 0,
 					'W': 0,
 					'Q': 0,
 					'P': prior,
 				}
-				
+
 
 class MCTS:
 
-	def __init__(self, root, cpuct):
+	def __init__(self, root, cpu_cnt):
 		self.root = root
 		self.tree = {}
-		self.cpuct = cpuct
+		self.cpu_cnt = cpu_cnt
 		self.addNode(root)
 	
 	def __len__(self):
 		return len(self.tree)
 
 	def moveToLeaf(self):
-
 		logging.info('------MOVING TO LEAF------')
-
 		breadcrumbs = []
 		currentNode = self.root
 
@@ -56,14 +55,15 @@ class MCTS:
 		value = 0
 
 		while not currentNode.isLeaf():
-
 			logging.info('PLAYER TURN...%d', currentNode.state.playerTurn)
 		
 			maxQU = -99999
 
 			if currentNode == self.root:
 				epsilon = config.EPSILON
-				nu = np.random.dirichlet([config.ALPHA] * len(currentNode.edges))
+				# 가능한 edge들의 개수 * alpha
+				# Parameter of the distribution (k dimension for sample of dimension k).
+				nu = np.random.dirichlet([config.ALPHA] * len(currentNode.edges) )
 			else:
 				epsilon = 0
 				nu = [0] * len(currentNode.edges)
@@ -74,8 +74,8 @@ class MCTS:
 
 			for idx, (action, edge) in enumerate(currentNode.edges):
 
-				U = self.cpuct * \
-					((1-epsilon) * edge.stats['P'] + epsilon * nu[idx] )  * \
+				U = self.cpu_cnt * \
+					((1-epsilon) * edge.stats['P'] + epsilon * nu[idx] ) * \
 					np.sqrt(Nb) / (1 + edge.stats['N'])
 					
 				Q = edge.stats['Q']
@@ -98,8 +98,6 @@ class MCTS:
 		logging.info('DONE...%d', done)
 
 		return currentNode, value, done, breadcrumbs
-
-
 
 	def backFill(self, leaf, value, breadcrumbs):
 		logging.info('------DOING BACKFILL------')

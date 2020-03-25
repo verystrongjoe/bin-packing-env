@@ -36,25 +36,25 @@ class GenModel:
 		:param targets:  { 'value_head' : value ndrray, 'policy_head' : policy ndarray}
 		:return:
 		"""
-		assert states.shape[0] == config.BATCH_SIZE
-		assert targets.shape[0] == config.BATCH_SIZE
+		# assert states.shape[0] == config.BATCH_SIZE
+		# assert targets.shape[0] == config.BATCH_SIZE
 
 		# todo : calculate loss with MSE for value_head and with softmax_cross_entropy_with_logits for policy_head!!
 		# todo : add parameter for spliting validation and verbose, epcochs
-		predict_v, predict_p = self.model(states).numpy()
+		# predict_v, predict_p = self.model(states.squeeze(0)).numpy()
+		predict_v, predict_p = self.model(states.squeeze(0))
 
 		loss = torch.tensor(0.).to(config.device)
 
 		# softmax_cross_entropy_with_logits for policy_head
 		p_loss = F.softmax(predict_p, dim=-1)
-		p_loss = -torch.sum(targets['policy_head'] * torch.log(p_loss), 1)
-		p_loss = torch.unsqueeze(loss, 1)
+		p_loss = -torch.sum(torch.tensor(targets['policy_head'], dtype=torch.float32).to(config.device) * torch.log(p_loss), 1)
 
 		loss += self.loss_weight['policy_head'] * torch.mean(p_loss)
 
 		# loss with MSE for value_head
-		v_loss = F.mse_loss(predict_p, targets['value_head'])
-		loss += self.loss_weight['value_head'] * p_loss
+		v_loss = F.mse_loss(predict_v, torch.tensor(targets['value_head'], dtype=torch.float32).to(config.device))
+		loss += self.loss_weight['value_head'] * v_loss
 
 		# optimize the model
 		self.optim.zero_grad()
@@ -63,6 +63,7 @@ class GenModel:
 		for param in self.model.parameters():
 			param.grad.data.clamp_(-1, 1)
 		self.optim.step()
+		return loss
 
 	def convert_to_model_input(self, state):
 		inputToModel = state.binary  # np.append(state.binary, [(state.playerTurn + 1)/2] * self.input_dim[1] * self.input_dim[2])
@@ -79,6 +80,54 @@ class GenModel:
 			torch.load(
 				run_archive_folder + game + '/run' + str(run_number).zfill(4) + "/models/version" + "{0:0>4}".format(version) + '.h5'))
 		self.model.eval()
+
+	def viewLayers(self):
+		layers = self.model.layers
+		for i, l in enumerate(layers):
+			x = l.get_weights()
+			print('LAYER ' + str(i))
+
+			try:
+				weights = x[0]
+				s = weights.shape
+
+				fig = plt.figure(figsize=(s[2], s[3]))  # width, height in inches
+				channel = 0
+				filter = 0
+				for i in range(s[2] * s[3]):
+					sub = fig.add_subplot(s[3], s[2], i + 1)
+					sub.imshow(weights[:, :, channel, filter], cmap='coolwarm', clim=(-1, 1), aspect="auto")
+					channel = (channel + 1) % s[2]
+					filter = (filter + 1) % s[3]
+
+			except:
+
+				try:
+					fig = plt.figure(figsize=(3, len(x)))  # width, height in inches
+					for i in range(len(x)):
+						sub = fig.add_subplot(len(x), 1, i + 1)
+						if i == 0:
+							clim = (0, 2)
+						else:
+							clim = (0, 2)
+						sub.imshow([x[i]], cmap='coolwarm', clim=clim, aspect="auto")
+
+					plt.show()
+
+				except:
+					try:
+						fig = plt.figure(figsize=(3, 3))  # width, height in inches
+						sub = fig.add_subplot(1, 1, 1)
+						sub.imshow(x[0], cmap='coolwarm', clim=(-1, 1), aspect="auto")
+
+						plt.show()
+
+					except:
+						pass
+
+			plt.show()
+
+		logging.logger_model.info('------------------')
 
 
 class ConvLayer(nn.Module):
@@ -123,7 +172,7 @@ class RedisualLayer(nn.Module):
 	def forward(self, x):
 		residual = self.conv2d(x)
 		x = self.conv2d_residual(x)
-		x = torch.cat([residual, x])
+		x = residual + x
 		x = self.leaky_relu_final(x)
 		return x
 
@@ -201,7 +250,8 @@ class Network(nn.Module):
 
 	def forward(self, x):
 		# assert x.shape == self.input_dim
-		x.unsqueeze_(0)
+		if len(x.shape) == 3:
+			x.unsqueeze_(0)
 		x = self.conv2d(x)
 
 		for l in self.residuals:

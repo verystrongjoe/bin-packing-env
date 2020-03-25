@@ -3,7 +3,10 @@ from sample_agent.agent import *
 from config import *
 import logging
 import pygame
+
 import os
+#os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   # see issue #152
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
 
 # import torch
 # import torchvision.utils as vutils
@@ -43,7 +46,7 @@ if __name__ == '__main__':
             #         break
             action = agent.get_action(state)
 
-            a = Action(bin_index=action[0], priority=action[1], rotate=action[2])
+            a = Action(bin_index=action[0], priority=0, rotate=action[1])
             next_state, reward, done, _ = env.step(a)
 
             # logging.debug('step : {}, action : {}, reward : {}, next state : {}'.format(step, action, reward, next_state))

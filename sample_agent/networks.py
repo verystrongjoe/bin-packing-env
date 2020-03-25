@@ -97,10 +97,14 @@ class BranchingDQN(nn.Module):
         self.action_dim = action_dim
         self.action_n_list = action_n_list
 
-        self.linear1 = nn.Linear(observation, AGENT.EMBEDDING_DIM)
+        self.conv1d_1 = nn.Conv1d(ENV.BIN_N_STATE, 4, kernel_size=4)
+        self.conv1d_2 = nn.Conv1d(4, 2, kernel_size=2)
+        self.conv1d_3 = nn.Conv1d(2, 1, kernel_size=1)
+
+        self.linear1 = nn.Linear(16, AGENT.EMBEDDING_DIM)
         self.linear2 = nn.Linear(AGENT.EMBEDDING_DIM, AGENT.EMBEDDING_DIM)
 
-        self.conv1 = nn.Conv2d(ENV.BIN_N_STATE, 4, kernel_size=4, stride=2)
+        self.conv1 = nn.Conv2d(2, 4, kernel_size=4, stride=2)
         self.bn1 = nn.BatchNorm2d(4)
         self.conv2 = nn.Conv2d(4, 8, kernel_size=2, stride=1)
         self.bn2 = nn.BatchNorm2d(8)
@@ -129,17 +133,26 @@ class BranchingDQN(nn.Module):
 
         assert type(bin_info) == torch.Tensor
         assert type(pallet_info) == torch.Tensor
-        assert bin_info.shape[-1] == 3
 
         # w/o batch size
         if len(bin_info.shape) != 3:
-            bin_info = bin_info.flatten()
+            assert bin_info.shape == (ENV.BIN_MAX_COUNT, ENV.BIN_N_STATE)
+            # bin_info = bin_info.flatten()
             bin_info.unsqueeze_(0)
         else:
-            bin_info = bin_info.reshape(-1, ENV.BIN_MAX_COUNT * 3)
+            assert bin_info.shape[1:] == (ENV.BIN_MAX_COUNT, ENV.BIN_N_STATE)
+            # bin_info = bin_info.reshape(-1, ENV.BIN_MAX_COUNT * ENV.BIN_N_STATE)
+            pass
+        bin_info = bin_info.permute(0,2,1)
+
+        bin_info = self.conv1d_1(bin_info)
+        bin_info = self.conv1d_2(bin_info)
+        bin_info = self.conv1d_3(bin_info)
+        bin_info = bin_info.squeeze(-2)
 
         if len(pallet_info.shape) != 4:
             pallet_info = pallet_info.unsqueeze(0)
+
         pallet_info = pallet_info.permute(0, 3, 1, 2)
 
         x1 = F.relu(self.linear1(bin_info))  # 1d
@@ -154,8 +167,8 @@ class BranchingDQN(nn.Module):
         shared = self.shared(x)
 
         v = self.v_head(shared)  # (batch, value)
-
         self.action_values = []
+
         for i in range(self.action_dim):
             self.action_values.append(self.adv_heads[i](shared))
 
@@ -170,5 +183,5 @@ class BranchingDQN(nn.Module):
 if __name__ == '__main__':
     # b = BDQN(5,4,6) # o = 5, a = 4, n = 6
     # b(torch.randn(10, 5))
-    b = BranchingDQN(30, 3, [10, 2, 2])
-    l = b(torch.randn(10, 30), torch.randn(10, ENV.ROW_COUNT, ENV.COL_COUNT, ENV.BIN_N_STATE))
+    b = BranchingDQN(ENV.BIN_MAX_COUNT * ENV.BIN_N_STATE, 2, [10, 2]).to(device)
+    l = b(torch.randn(10, ENV.BIN_MAX_COUNT, ENV.BIN_N_STATE).to(device), torch.randn(10, ENV.ROW_COUNT, ENV.COL_COUNT, ENV.BIN_N_STATE).to(device))

@@ -6,9 +6,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 INPUT_CHANNEL = 2
 
 ## SELF PLAY
-EPISODES = 30
+EPISODES = 25  # todo : change 25
 MCTS_SIMS = 50
-MEMORY_SIZE = 30000
+MEMORY_SIZE = 30000 # todo : 30000
 TURNS_UNTIL_TAU0 = 10 # turn on which it starts playing deterministically
 CPUCT = 1
 EPSILON = 0.2
@@ -32,5 +32,5 @@ HIDDEN_CNN_LAYERS = [
     ]
 
 ## EVALUATION
-EVAL_EPISODES = 20
+EVAL_EPISODES = 20  # todo : 20
 SCORING_THRESHOLD = 1.3

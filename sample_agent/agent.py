@@ -51,7 +51,7 @@ class PalletAgent:
             if value > max_value:
                 max_index_list.clear()
                 max_value = value
-                max_index_list.append(index)
+                max_index_list.append(index)a
             elif value == max_value:
                 max_index_list.append(index)
         return random.choice(max_index_list)

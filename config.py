@@ -42,7 +42,7 @@ class ENV:
     CELL_SIZE = 50
 
     # Bins information
-    BIN_N_STATE = 2  # pos, weight on 2d
+    BIN_N_STATE = 3  # pos, weight on 2d
 
     BIN_MAX_COUNT = 20
     EPISODE_MAX_STEP = 20
