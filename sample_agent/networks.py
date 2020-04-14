@@ -3,14 +3,57 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import torchvision.transforms as T
-from config import *
+from env_config import *
+
+
+class MnistNet(nn.Module):
+    def __init__(self):
+        super(MnistNet, self).__init__()
+        self.conv1 = nn.Conv2d(1, 20, 5, 1)
+        self.conv2 = nn.Conv2d(20, 50, 5, 1)
+        self.fc1 = nn.Linear(4*4*50, 500)
+        self.fc2 = nn.Linear(500, 10)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = F.max_pool2d(x, 2, 2)
+        x = F.relu(self.conv2(x))
+        x = F.max_pool2d(x, 2, 2)
+        x = x.view(-1, 4*4*50)
+        x = F.relu(self.fc1(x))
+        x = self.fc2(x)
+        return F.log_softmax(x, dim=1)
+
+
+class DQN(nn.Module):
+    """
+    Ranked Reward처럼 채널 bin의 정보들이 채워져 온다고 하고 문제 풀자
+    BIN 10 x 10
+    ITEM 5 (size : 0~5 x 0~5)
+    BIN ROW * BIN HEIGHT * (BIN STATE, BIN INFO)
+    """
+    def __init__(self):
+        super(MnistNet, self).__init__()
+        self.conv1 = nn.Conv2d(6, 20, 5, 1)
+        self.conv2 = nn.Conv2d(20, 50, 5, 1)
+        self.fc1 = nn.Linear(4*4*50, 500)
+        self.fc2 = nn.Linear(500, 10)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = F.max_pool2d(x, 2, 2)
+        x = F.relu(self.conv2(x))
+        x = F.max_pool2d(x, 2, 2)
+        x = x.view(-1, 4*4*50)
+        x = F.relu(self.fc1(x))
+        x = self.fc2(x)
+        return F.log_softmax(x, dim=1)
 
 
 class DQN(nn.Module):
 
     def __init__(self, ):
         super(DQN, self).__init__()
-
         self.linear1 = nn.Linear(ENV.BIN_MAX_COUNT*3, AGENT.EMBEDDING_DIM)
         self.linear2 = nn.Linear(AGENT.EMBEDDING_DIM, AGENT.EMBEDDING_DIM)
 
@@ -21,10 +64,9 @@ class DQN(nn.Module):
         self.conv3 = nn.Conv2d(8, 8, kernel_size=2, stride=2)
         self.bn3 = nn.BatchNorm2d(8)
 
-        # Number of Linear input connections depends on output of conv2d layers
-        # and therefore the input image size, so compute it.
         def conv2d_size_out(size, kernel_size=5, stride=2):
             return (size - (kernel_size - 1) - 1) // stride + 1
+
         convw = conv2d_size_out(conv2d_size_out(conv2d_size_out(ENV.ROW_COUNT, 5, 2), 3, 2), 2, 2)
         convh = conv2d_size_out(conv2d_size_out(conv2d_size_out(ENV.COL_COUNT, 5, 2), 3, 2), 2, 2)
 
@@ -183,5 +225,10 @@ class BranchingDQN(nn.Module):
 if __name__ == '__main__':
     # b = BDQN(5,4,6) # o = 5, a = 4, n = 6
     # b(torch.randn(10, 5))
+
     b = BranchingDQN(ENV.BIN_MAX_COUNT * ENV.BIN_N_STATE, 2, [10, 2]).to(device)
-    l = b(torch.randn(10, ENV.BIN_MAX_COUNT, ENV.BIN_N_STATE).to(device), torch.randn(10, ENV.ROW_COUNT, ENV.COL_COUNT, ENV.BIN_N_STATE).to(device))
+
+    l = b(
+            torch.randn(10, ENV.BIN_MAX_COUNT, ENV.BIN_N_STATE).to(device),
+        torch.randn(10, ENV.ROW_COUNT, ENV.COL_COUNT, ENV.BIN_N_STATE).to(device)
+    )

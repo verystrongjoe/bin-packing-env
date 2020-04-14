@@ -1,6 +1,7 @@
 from collections import namedtuple
 import torch
 
+
 Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward'))
 
 # 문제를 가로/세로/하중을 각 BIN의 속성으로 설정
@@ -31,8 +32,8 @@ class GUI:
 # ENVIRONMENT FOR PALLETE
 class ENV:
 
-    RENDER = True
-    TICK_INTERVAL = 10000  # the smaller it is, the slower the game plays
+    RENDER = False
+    TICK_INTERVAL = 100  # the smaller it is, the slower the game plays
 
     # Environment Parameter
     FONT_SIZE = 15
@@ -53,7 +54,7 @@ class ENV:
     BIN_MAX_Y_SIZE = 3
 
     BIN_MIN_W_SIZE = 1
-    BIN_MAX_W_SIZE = 2
+    BIN_MAX_W_SIZE = 1
 
     # Agent Side
     AGENT_STARTING_POS = [0, 0]
@@ -67,12 +68,10 @@ class ENV:
     VERBOSE = 0
 
 
-
 class REWARD:
-    INVALID_ACTION_REWARD = -0.1
+    INVALID_ACTION_REWARD = 0
     GOAL_REWARD = 1.0
-    MODE = 0
-
+    MODE = 1
 
 class AGENT:
     DISCOUNT_FACTOR_REWARD = 0.9

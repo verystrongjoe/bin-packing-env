@@ -103,7 +103,7 @@ bin-packing-env\run.py
 ```
 from environment import PalleteWorld
 from agent import *
-from config import *
+from env_config import *
 import logging
 import pygame
 

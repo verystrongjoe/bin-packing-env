@@ -1,5 +1,5 @@
 import numpy as np
-from config import *
+from env_config import *
 import random
 
 
