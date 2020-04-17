@@ -1,3 +1,7 @@
+"""
+https://github.com/ethancaballero/pytorch-a2c-ppo/blob/master/main.py
+"""
+
 import argparse
 import gym
 import numpy as np
@@ -108,7 +112,7 @@ class A2C(nn.Module):
             for m in p[:step]:
                 action_probs[i][m] = -np.inf
 
-        return F.softmax(x, dim=1), value[1]
+        return F.softmax(action_probs, dim=1), value
 
 
 policy = A2C()
@@ -129,7 +133,7 @@ def select_action(state, previous_action, step):
     boxes), axis=-1)
 
     state = torch.from_numpy(state).float().cuda()
-    values, probs = policy(state, previous_action, step)
+    probs, values  = policy(state, previous_action, step)
     ps = probs.cpu().data.numpy()
     actions = []
     action_probs = []
@@ -186,14 +190,11 @@ def main():
             actions, action_probs, values = select_action(state, previous_action, step)
             log_probs = action_probs
 
-            cpu_actions = actions[step].cpu()
-            cpu_actions = cpu_actions.numpy()
-
-            actions = [env_cfg.Action(bin_index=a, priority=1, rotate=0) for a in cpu_actions]
+            actions = [env_cfg.Action(bin_index=a, priority=1, rotate=0) for a in actions]
 
             state, reward, done, info = envs.step(actions)
 
-            for i, a in enumerate(cpu_actions):
+            for i, a in enumerate(actions):
                 previous_action[i][step] = a
 
             reward = torch.from_numpy(np.expand_dims(np.stack(reward), 1)).float()
