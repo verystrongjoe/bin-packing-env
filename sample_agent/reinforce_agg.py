@@ -1,12 +1,13 @@
 import argparse
 import gym
+from torch.distributions import Categorical
+import logging
 import numpy as np
 from itertools import count
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from torch.distributions import Categorical
 import env_config as env_cfg
 # env_cfg.ENV.RENDER = True
 
@@ -15,16 +16,21 @@ import pygame
 from tensorboardX import SummaryWriter
 
 writer = SummaryWriter()
-env = PalleteWorld(n_random_fixed=1)
+env = PalleteWorld(n_random_fixed=2)
+
+# logger = logging.getLogger('uk')
+# logger.setLevel(logging.DEBUG)
+
 
 # env.seed(args.seed)
 # torch.manual_seed(args.seed)
-class Convolution(nn.Module):
 
+
+class Convolution(nn.Module):
     def __init__(self):
         super(Convolution, self).__init__()
-        self.conv1 = nn.Conv2d(1, 20, 3, 1)
-        self.conv2 = nn.Conv2d(20, 30, 3, 1)
+        self.conv1 = nn.Conv2d(1, env_cfg.ENV.BIN_MAX_COUNT, 3, 1)
+        self.conv2 = nn.Conv2d(env_cfg.ENV.BIN_MAX_COUNT, 30, 3, 1)
 
     def forward(self, x):
         bin = x.permute(0, 3, 1, 2)
@@ -39,18 +45,15 @@ class Policy(nn.Module):
 
     def __init__(self):
         super(Policy, self).__init__()
-
         self.conv_item = Convolution()
         self.conv_bin = Convolution()
-
         self.fc1 = nn.Linear(60, 200)
         self.fc2 = nn.Linear(200, 200)
-        self.fc3 = nn.Linear(200, 20)
-
+        self.fc3 = nn.Linear(200, env_cfg.ENV.BIN_MAX_COUNT)
         self.saved_log_probs = []
         self.rewards = []
 
-    def forward(self, x):
+    def forward(self, x, mask):
         batch_dim = x.shape[0]
         n_item = x.shape[3] - 1
 
@@ -69,6 +72,10 @@ class Policy(nn.Module):
         x = F.relu(self.fc1(concat))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
+
+        for a in mask:
+            x[0][a] = -np.inf
+
         return F.softmax(x, dim=1)
 
 
@@ -79,34 +86,54 @@ eps = np.finfo(np.float32).eps.item()
 
 def select_action(state, previous_actions):
     # this is for visual representation.
-    boxes = torch.zeros(10, 10, 20)  # x, y, box count
+    boxes = torch.zeros(10, 10, env_cfg.ENV.BIN_MAX_COUNT)  # x, y, box count
     for i, box in enumerate(state[0]):  # box = x,y
         boxes[-1*box[1]:, 0:box[0], i] = 1.
 
     state = np.concatenate((np.expand_dims(state[1][:,:,0], axis=-1), boxes), axis=-1)
     state = torch.from_numpy(state).float().unsqueeze(0)
-    probs = policy(state)
+    probs = policy(state, previous_actions)
 
-    m = Categorical(probs)
+    # m = Categorical(probs)
+    # p = probs[0].detach().numpy()
+    p = probs[0].data.numpy()
+    # p[previous_actions] = -100
+    # odds = np.exp(p)
+    # act_probs = odds / np.sum(odds)
 
-    p = probs[0].detach().numpy()
-    p[previous_actions] = -100
-    odds = np.exp(p)
-    act_probs = odds / np.sum(odds)
-    action = np.random.choice(20, 1, p=act_probs)[0]
-    policy.saved_log_probs.append(m.log_prob(probs[0][action]))
+    action = np.random.choice(env_cfg.ENV.BIN_MAX_COUNT, 1, p=p)[0]
+    # policy.saved_log_probs.append(m.log_prob(probs[0][action]))
+    policy.saved_log_probs.append(torch.log(probs[0][action]))
     return action
+
+
+from collections import deque
+last_rewards = deque(maxlen=100)
 
 
 def finish_episode():
     R = 0
     policy_loss = []
     returns = []
+
+    # # 동일문제
+    # reset()
+    # while not done:
+    #     critic_model(state)
+    #     step(action)
+    #
+    # final_reward
+    #
+    # rr = policy.rewards[-1] - final_reward
+
+    last_rewards.append(policy.rewards[-1])
+    policy.rewards[-1] -= np.mean(last_rewards)
+
     for r in policy.rewards[::-1]:
         R = r + 0.99 * R
         returns.insert(0, R)
     returns = torch.tensor(returns)
-    returns = (returns - returns.mean()) / (returns.std() + eps)
+    # returns = (returns - returns.mean()) / (returns.std() + eps)
     for log_prob, R in zip(policy.saved_log_probs, returns):
         policy_loss.append(-log_prob * R)
     optimizer.zero_grad()
@@ -126,11 +153,11 @@ def main():
         state, ep_reward, previous_actions = env.reset(), 0, []
         n_placed_items = 0
 
-        for t in range(1, 10000):  # Don't infinite loop while learning
-            action = select_action(state,previous_actions)
+        for t in range(0, env_cfg.ENV.BIN_MAX_COUNT):  # Don't infinite loop while learning
+            action = select_action(state, previous_actions)
             # print('{} step , {} action'.format(t ,action))
             previous_actions.append(action)
-            a = env_cfg.Action(bin_index=action, priority=1, rotate=1)
+            a = env_cfg.Action(bin_index=action, priority=1, rotate=0)
             state, reward, done, info = env.step(a)
 
             if env_cfg.ENV.RENDER:
@@ -140,6 +167,7 @@ def main():
             policy.rewards.append(reward)
             ep_reward += reward
             if done:
+                # print('episode end')
                 # print('len of action : {}, episode actions : {}'.format(len(env.previous_actions), env.previous_actions))
                 n_placed_items = len(info['placed_items'])
                 break

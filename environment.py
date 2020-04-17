@@ -8,6 +8,10 @@ import os
 import pandas as pd
 import logging
 
+
+logger = logging.getLogger('uk')
+logger.setLevel(logging.ERROR)
+
 if ENV.RENDER:
     import pygame
 
@@ -16,8 +20,9 @@ class PalleteWorld(Env):
     """
     State : (Bin List, Current Snapshot of 2D Pallet (exist, weight) )
     """
-    def __init__(self, mode='agent', n_random_fixed=None):
+    def __init__(self, mode='agent', n_random_fixed=None, env_id=None):
 
+        self.env_id = env_id
         self.n_random_fixed = n_random_fixed
         self.total_items = []
         self.placed_items = []
@@ -93,6 +98,7 @@ class PalleteWorld(Env):
         self.is_bin_placed = False
         self.n_step = 0
 
+        # print(self.bins_list)
         return self.bins_list, self.p
 
     def is_valid(self, c, r, b: Bin):
@@ -107,26 +113,26 @@ class PalleteWorld(Env):
         if r + b.height > ENV.ROW_COUNT:
             is_spacious = False
             if verbose != 0:
-                logging.debug('Not valid. It\'s not spacious over x axis.')
+                logger.debug('Not valid. It\'s not spacious over x axis.')
             return False
 
         if c + b.width > ENV.COL_COUNT:
             is_spacious = False
             if verbose != 0:
-                logging.debug('Not valid. It\'s not spacious over y axis.')
+                logger.debug('Not valid. It\'s not spacious over y axis.')
             return False
 
         # todo : to make it real, it adds constraints that any bins can not load if there is any bins above of it.
         if r != ENV.ROW_COUNT -1:
             if not (0. == self.p[0:ENV.ROW_COUNT-r, c:c + b.width, 0]).all():
                 if verbose != 0:
-                    logging.debug('this is not valid because there are other bins above of it.')
+                    logger.debug('this is not valid because there are other bins above of it.')
                 is_exist_above = True
                 return False
 
         if not (0. == self.p[ENV.ROW_COUNT-r-b.height:ENV.ROW_COUNT-r, c:c + b.width, 0]).all():
             if verbose != 0:
-                logging.debug('Not valid. The area is already possessed by other bins.')
+                logger.debug('Not valid. The area is already possessed by other bins.')
             is_exist = True
             return False
 
@@ -136,17 +142,16 @@ class PalleteWorld(Env):
                 is_fail = False
             else:
                 if verbose != 0:
-                    logging.debug('Not valid. The bin could be fallen lack of support of bottom bins')
+                    logger.debug('Not valid. The bin could be fallen lack of support of bottom bins')
                 is_fall = True
                 return False
 
         # can_load check
-        if c > 0:
-            if b.weight > self.p[r:r+b.height, c - 1, 1].any():
-                if verbose != 0:
-                    logging.debug('Not valid. The bins below can not stand the weight of this bin.')
-                can_load = False
-                return False
+        # if b.weight > self.p[r:r+b.height, c - 1, 1].any():
+        #     if verbose != 0:
+        #         logger.debug('Not valid. The bins below can not stand the weight of this bin.')
+        #     can_load = False
+        #     return False
 
         if is_spacious and not is_exist and not is_fall and can_load and not is_exist_above:
             return True
@@ -208,11 +213,20 @@ class PalleteWorld(Env):
         for i in self.previous_actions:
             self.bins_list[i] = (0,0,0)
 
+        board = np.asarray(self.p[:, :, 0])
+        area = board.sum()
+        total_area = ENV.ROW_COUNT * ENV.COL_COUNT
+
+        self.percentage = area / total_area
+
         # next_state, reward, done, info
-        return (self.bins_list, self.p), self.get_reward(), self.is_done(), {'placed_items':self.placed_items}
+        return (self.bins_list, self.p), self.get_reward(), self.is_done(), {'placed_items':self.placed_items, 'percentage': self.percentage}
 
     def is_done(self):
-        if self.current_bin_placed == ENV.BIN_MAX_COUNT or self.n_step == ENV.EPISODE_MAX_STEP:
+
+        # print('percentage : {}'.format(percentage))
+
+        if self.current_bin_placed == ENV.BIN_MAX_COUNT or self.n_step == ENV.EPISODE_MAX_STEP or len(self.previous_actions) == ENV.BIN_MAX_COUNT and self.percentage > 0.9:
             return True
         else:
             return False
