@@ -16,7 +16,6 @@ import pygame
 from tensorboardX import SummaryWriter
 
 writer = SummaryWriter()
-env = PalleteWorld(n_random_fixed=2)
 
 # logger = logging.getLogger('uk')
 # logger.setLevel(logging.DEBUG)
@@ -80,7 +79,7 @@ class Policy(nn.Module):
 
 
 policy = Policy()
-optimizer = optim.Adam(policy.parameters(), lr=1e-2)
+optimizer = optim.Adam(policy.parameters(), lr=1e-4)
 eps = np.finfo(np.float32).eps.item()
 
 
@@ -116,18 +115,8 @@ def finish_episode():
     policy_loss = []
     returns = []
 
-    # # 동일문제
-    # reset()
-    # while not done:
-    #     critic_model(state)
-    #     step(action)
-    #
-    # final_reward
-    #
-    # rr = policy.rewards[-1] - final_reward
-
     last_rewards.append(policy.rewards[-1])
-    policy.rewards[-1] -= np.mean(last_rewards)
+    # policy.rewards[-1] -= np.mean(last_rewards)
 
     for r in policy.rewards[::-1]:
         R = r + 0.99 * R
@@ -144,7 +133,10 @@ def finish_episode():
     del policy.saved_log_probs[:]
 
 
-def main():
+def main(env):
+
+    env = env
+    ep_rewards = []
 
     if env_cfg.ENV.RENDER:
         clock = pygame.time.Clock()
@@ -169,6 +161,7 @@ def main():
             if done:
                 # print('episode end')
                 # print('len of action : {}, episode actions : {}'.format(len(env.previous_actions), env.previous_actions))
+                ep_rewards.append(ep_reward)
                 n_placed_items = len(info['placed_items'])
                 break
 
@@ -178,10 +171,13 @@ def main():
         writer.add_scalar('data/final_reward', ep_reward, i_episode)
         writer.add_scalar('data/n_placed_items', n_placed_items, i_episode)
 
-        # if running_reward > env.spec.reward_threshold:
-        #     print("Solved! Running reward is now {} and "
-        #           "the last episode runs to {} time steps!".format(running_reward, t))
-        #     break
+        def checkEqual(iterator):
+            return len(set(iterator)) <= 1
+
+        if checkEqual(ep_rewards[-20:]) and len(ep_rewards) > 100:
+            print("Solved! last reward is {}".format(ep_rewards[-1]))
+            return ep_rewards[-1]
 
 if __name__ == '__main__':
+    env = PalleteWorld(n_random_fixed=1)
     main()

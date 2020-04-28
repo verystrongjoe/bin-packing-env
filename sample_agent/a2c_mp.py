@@ -1,6 +1,155 @@
-"""
-https://github.com/ethancaballero/pytorch-a2c-ppo/blob/master/main.py
-"""
+# https://squadrick.dev/journal/efficient-multi-gym-environments.html
+import env_config as env_cfg
+from environment import PalleteWorld
+import multiprocessing as mp
+from multiprocessing import Pipe, Process, freeze_support
+import numpy as np
+import pickle
+import cloudpickle
+
+num_frames = 10000000
+num_steps = 10
+num_processes = 10
+seed = 0
+num_updates = int(num_frames) // num_steps // num_processes
+
+
+class AlreadySteppingError(Exception):
+    """
+    Raised when an asynchronous step is running while
+    step_async() is called again.
+    """
+
+    def __init__(self):
+        msg = 'already running an async step'
+        Exception.__init__(self, msg)
+
+
+class NotSteppingError(Exception):
+    """
+    Raised when an asynchronous step is not running but
+    step_wait() is called.
+    """
+
+    def __init__(self):
+        msg = 'not running an async step'
+        Exception.__init__(self, msg)
+
+
+class SubproVecEnv():
+    def __init__(self, env_fns):
+        self.waiting = False
+        self.closed = False
+        no_of_envs = len(env_fns)
+        self.remotes, self.work_remotes = zip(*[Pipe() for _ in range(no_of_envs)])
+        self.ps = []
+
+        for wrk, rem, fn in zip(self.work_remotes, self.remotes, env_fns):
+            proc = Process(target=worker,
+                           args=(wrk, rem, CloudpickleWrapper(fn)))
+            self.ps.append(proc)
+
+        for p in self.ps:
+            p.daemon = True
+            p.start()
+
+        for remote in self.work_remotes:
+            remote.close()
+
+    def step_async(self, actions):
+        if self.waiting:
+            raise AlreadySteppingError
+        self.waiting = True
+
+        for remote, action in zip(self.remotes, actions):
+            remote.send(('step', action))
+
+    def step_wait(self):
+        if not self.waiting:
+            raise NotSteppingError
+        self.waiting = False
+
+        results = [remote.recv() for remote in self.remotes]
+        obs, rews, dones, infos = zip(*results)
+        # return np.stack(obs), np.stack(rews), np.stack(dones), np.stack(infos)
+        return obs, rews, dones, infos
+
+    def step(self, actions):
+        self.step_async(actions)
+        return self.step_wait()
+
+    def reset(self):
+        obs = []
+        for remote in self.remotes:
+            remote.send(('reset', None))
+
+        for remote in self.remotes:
+            obs.append(remote.recv())
+
+        return obs
+
+    def close(self):
+        if self.closed:
+            return
+        if self.waiting:
+            for remote in self.remotes:
+                remote.recv()
+        for remote in self.remotes:
+            remote.send(('close', None))
+        for p in self.ps:
+            p.join()
+        self.closed = True
+
+
+class CloudpickleWrapper(object):
+    def __init__(self, x):
+        self.x = x
+
+    def __getstate__(self):
+        return cloudpickle.dumps(self.x)
+
+    def __setstate__(self, ob):
+        self.x = pickle.loads(ob)
+
+    def __call__(self):
+        return self.x()
+
+
+def worker(remote, parent_remote, env_fn):
+    parent_remote.close()
+    env = env_fn()
+    while True:
+        cmd, data = remote.recv()
+
+        if cmd == 'step':
+            ob, reward, done, info = env.step(data)
+            if done:
+                ob = env.reset()
+            remote.send((ob, reward, done, info))
+
+        elif cmd == 'render':
+            remote.send(env.render())
+
+        elif cmd == 'close':
+            remote.close()
+            break
+        elif cmd == 'reset':
+            ob = env.reset()
+            remote.send(ob)
+
+        else:
+            raise NotImplementedError
+
+def make_mp_envs(env_id, num_env, seed, start_idx = 0):
+    def make_env(rank):
+        def fn():
+            env = PalleteWorld(env_id=env_id, n_random_fixed=10)
+            env.seed(seed + rank)
+            return env
+        return fn
+    return SubproVecEnv([make_env(i + start_idx) for i in range(num_env)])
+
+
 import argparse
 import gym
 import numpy as np
@@ -58,7 +207,6 @@ class MultiEnv:
 
 
 envs = MultiEnv(num_env=num_processes)
-writer = SummaryWriter()
 
 
 class Convolution(nn.Module):
@@ -152,9 +300,15 @@ def select_action(state, previous_action, step):
     return actions, logits, value, entropy
 
 
+
+
+
+
+
+
 def main():
 
-
+    envs = make_mp_envs(env_id=3, num_env=num_processes, seed=1)
 
     """
     ****************************에피소드 실행 메인**************************************
@@ -254,7 +408,8 @@ def main():
         writer.add_scalar('data/entropy_loss', -torch.sum(entropys).item(), j)
 
         if j % 10 == 0:
-            print("Updates {}, num frames {}, mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}, entropy {:.5f}, value loss {:.5f}, policy loss {:.5f}".
+            print(
+                "Updates {}, num frames {}, mean/median reward {:.1f}/{:.1f}, min/max reward {:.1f}/{:.1f}, entropy {:.5f}, value loss {:.5f}, policy loss {:.5f}".
                 format(j, j * num_processes * num_steps,
                        final_rewards.mean(),
                        final_rewards.median(),
@@ -264,4 +419,5 @@ def main():
 
 
 if __name__ == '__main__':
+    mp.freeze_support()
     main()

@@ -1,13 +1,14 @@
 from gym.core import Env as Env
 from env_config import *
 import numpy as np
-from collections import namedtuple
-import matplotlib._color_data as mcd
 import random
 import os
 import pandas as pd
 import logging
-
+import pickle
+from collections import namedtuple
+import matplotlib._color_data as mcd
+import datetime
 
 logger = logging.getLogger('uk')
 logger.setLevel(logging.ERROR)
@@ -20,14 +21,18 @@ class PalleteWorld(Env):
     """
     State : (Bin List, Current Snapshot of 2D Pallet (exist, weight) )
     """
-    def __init__(self, mode='agent', n_random_fixed=None, env_id=None):
+    def __init__(self, mode='agent', n_random_fixed=None, datasets=None, env_id=None):
 
         self.env_id = env_id
         self.n_random_fixed = n_random_fixed
         self.total_items = []
         self.placed_items = []
 
-        if self.n_random_fixed is not None and self.n_random_fixed > 0:
+        if datasets is not None:
+            self.n_random_fixed = len(datasets)
+            self.total_items = datasets
+
+        elif self.n_random_fixed is not None and self.n_random_fixed > 0:
             for i in range(self.n_random_fixed):
                 bins_list = []
                 for i, b in enumerate(range(ENV.BIN_MAX_COUNT)):
@@ -36,6 +41,8 @@ class PalleteWorld(Env):
                     w = random.randint(ENV.BIN_MIN_W_SIZE, ENV.BIN_MAX_W_SIZE)
                     bins_list.append((x, y, w))
                 self.total_items.append(bins_list)
+            # datetime.today().strftime("%Y%m%d%H%M%S")
+            self.save_dataset('env_dataset_' + str(self.env_id))
 
         if ENV.RENDER:
             os.environ['SDL_VIDEO_WINDOW_POS'] = "%d, %d" % (GUI.WINDOW_POS_X, GUI.WINDOW_POS_Y)
@@ -56,6 +63,13 @@ class PalleteWorld(Env):
 
         self.reset()
 
+    def save_dataset(self, filename):
+        if self.n_random_fixed is None:
+            logging.error('This environment is initialized with random generation for each episode so that there is no predefined dataset.')
+            raise AttributeError()
+        fileObj = open(filename, 'wb')
+        pickle.dump(self.total_items, fileObj)
+
     def seed(self, seed=None):
         # todo : check others
         random.seed(seed)
@@ -67,7 +81,7 @@ class PalleteWorld(Env):
         if ENV.RENDER:
             """
             시각화 관련 정보들 초기화
-                """
+            """
             self.screen = pygame.display.set_mode([self.total_pixel_row_size, self.total_pixel_col_size])
             self.font = pygame.font.SysFont('consolas', ENV.FONT_SIZE, 1)
 
